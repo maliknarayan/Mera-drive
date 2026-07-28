@@ -45,3 +45,52 @@ export interface CurrentUser {
   name: string;
   avatar_url: string;
 }
+
+/**
+ * Aggregate the accounts payload into the dashboard totals.
+ *
+ * The web app derives the summary locally rather than calling `GET /storage`,
+ * which would repeat the same fan-out and double the Google API calls needed to
+ * render one screen. Mirrors `accounts.Summarise` in the Go API.
+ */
+export function summariseAccounts(accounts: readonly ConnectedAccount[]): StorageSummary {
+  let totalUsage = 0;
+  let limited = 0;
+  let anyLimited = false;
+  let connected = 0;
+  let unlimited = 0;
+
+  for (const account of accounts) {
+    if (account.status === 'connected') connected += 1;
+    if (!account.quota) continue;
+
+    totalUsage += account.quota.usage;
+
+    if (account.quota.limit === null) {
+      unlimited += 1;
+      continue;
+    }
+    limited += account.quota.limit;
+    anyLimited = true;
+  }
+
+  return {
+    total_limit: anyLimited ? limited : null,
+    total_usage: totalUsage,
+    total_free: anyLimited ? Math.max(0, limited - totalUsage) : null,
+    account_count: accounts.length,
+    connected_count: connected,
+    unlimited_count: unlimited,
+  };
+}
+
+/** Accent colour slot for an account, matching the --drive-N CSS variables. */
+export function driveAccent(index: number): string {
+  return `var(--drive-${(index % 5) + 1})`;
+}
+
+export const ACCOUNT_STATUS_LABELS: Record<AccountStatus, string> = {
+  connected: 'Connected',
+  reauth_required: 'Reconnect required',
+  disconnected: 'Disconnected',
+};

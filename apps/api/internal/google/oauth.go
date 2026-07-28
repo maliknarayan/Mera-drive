@@ -179,6 +179,30 @@ func (a *Authenticator) Exchange(ctx context.Context, code string) (*Token, erro
 	}, nil
 }
 
+// Refresh mints a new access token from a stored refresh token.
+//
+// Google does not return the granted scope on a refresh, so GrantedScopes is
+// empty here; the account row is the record of what was granted.
+func (a *Authenticator) Refresh(ctx context.Context, refreshToken string) (*Token, error) {
+	if refreshToken == "" {
+		return nil, apperr.ReauthRequired("This account has no stored credentials. Please reconnect it.")
+	}
+	ctx = context.WithValue(ctx, oauth2.HTTPClient, a.client)
+
+	source := a.oauthConfig(nil).TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken})
+	tok, err := source.Token()
+	if err != nil {
+		return nil, mapOAuthError(err)
+	}
+
+	return &Token{
+		AccessToken:   tok.AccessToken,
+		RefreshToken:  refreshToken,
+		Expiry:        tok.Expiry,
+		GrantedScopes: strings.Fields(stringExtra(tok, "scope")),
+	}, nil
+}
+
 // Profile fetches the OpenID userinfo for an access token.
 func (a *Authenticator) Profile(ctx context.Context, accessToken string) (*Profile, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.endpoints.UserInfo, nil)

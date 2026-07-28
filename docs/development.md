@@ -15,11 +15,12 @@ apps/
   api/                        Go + Fiber backend
     cmd/server/               entrypoint, graceful shutdown
     internal/
+      accounts/               multi-Drive fan-out, partial failure, summaries
       apperr/                 the error type crossing the HTTP boundary
       auth/                   sessions, CSRF, OAuth state, cookies
       config/                 env parsing and validation
       cryptobox/              AES-GCM, HMAC, token hashing
-      google/                 Google OAuth client (injectable endpoints)
+      google/                 OAuth + Drive clients, token cache, retry
       httpx/                  envelope, middleware, error renderer
       logging/                slog setup
       server/                 Fiber app, middleware, route handlers
@@ -28,8 +29,9 @@ apps/
   web/                        Next.js frontend
     app/                      App Router pages and providers
     components/               UI, with primitives under components/ui
-      auth/                   sign-in, session and callback UI
-    lib/                      API client, query client, auth hooks
+      auth/                   sign-in and callback UI
+      dashboard/              storage cards, graph, account cards
+    lib/                      API client, query client, auth and account hooks
 packages/
   shared/                     TypeScript types mirroring the Go DTOs
 docker/                       compose files and reverse-proxy examples

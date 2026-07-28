@@ -3,9 +3,9 @@
 Base path: `/api/v1`. All responses are JSON unless the endpoint streams file
 bytes.
 
-> Phases 1–2 are implemented: probes, `/meta`, and the full authentication
-> surface. Remaining endpoints are listed under [Planned](#planned) with the shape
-> they will take, so the client contract is stable to build against.
+> Phases 1–3 are implemented: probes, `/meta`, authentication, and account
+> management. Remaining endpoints are listed under [Planned](#planned) with the
+> shape they will take, so the client contract is stable to build against.
 
 ## Conventions
 
@@ -209,15 +209,137 @@ navigation, and `Strict` would withhold the session cookie on arrival.
 
 ---
 
+## Account endpoints
+
+All require a session. Writes also require the CSRF header.
+
+### `GET /api/v1/accounts`
+
+Every connected account with **live** storage figures, fetched concurrently from
+Google on each request. Nothing here is cached server-side.
+
+```json
+{
+  "data": [
+    {
+      "id": "acc_7f3a",
+      "email": "you@example.com",
+      "name": "You",
+      "avatar_url": "https://lh3.googleusercontent.com/…",
+      "scope": "drive.file",
+      "status": "connected",
+      "connected_at": "2026-01-04T09:22:11Z",
+      "last_used_at": null,
+      "quota": {
+        "limit": 16106127360,
+        "usage": 5368709120,
+        "usage_in_drive": 5000000000,
+        "usage_in_trash": 368709120
+      }
+    }
+  ],
+  "meta": { "count": 1, "errors": [] }
+}
+```
+
+`quota.limit` is `null` for accounts with unlimited storage. `quota` is **absent**
+when the account is unusable or its live call failed — check `meta.errors`.
+
+Refresh tokens, Google user IDs and access tokens never appear in this payload.
+
+**Partial failure.** If one Drive fails, the response is still `200`:
+
+```json
+{
+  "data": [ /* … all accounts, the failed one without `quota` … */ ],
+  "meta": {
+    "count": 4,
+    "errors": [
+      {
+        "code": "reauth_required",
+        "message": "Google rejected the stored credentials. Please reconnect this account.",
+        "account_id": "acc_9b21"
+      }
+    ]
+  }
+}
+```
+
+A `reauth_required` failure also **persists** `status: "reauth_required"` on that
+account, so the dashboard is correct on reload without a second probe. A transient
+`upstream_unavailable` does not change status — a Google blip is not a credentials
+problem.
+
+Concurrency is bounded by `DRIVE_CONCURRENCY`; each call is bounded by
+`DRIVE_TIMEOUT`. Transient failures (`429`, `5xx`) are retried up to 4 times with
+exponential backoff and jitter, honouring `Retry-After`.
+
+### `GET /api/v1/storage`
+
+The aggregate summary.
+
+```json
+{
+  "data": {
+    "total_limit": 48318382080,
+    "total_usage": 12884901888,
+    "total_free": 35433480192,
+    "account_count": 3,
+    "connected_count": 3,
+    "unlimited_count": 0
+  },
+  "meta": { "count": 3, "errors": [] }
+}
+```
+
+Accounts reporting unlimited storage are counted in `unlimited_count` and excluded
+from `total_limit` — folding them in would badly understate free space.
+
+> This endpoint performs the **same fan-out** as `GET /accounts`. The web app does
+> not call it; it derives the summary from the accounts payload it already has,
+> rather than doubling Google API calls to render one card. The endpoint exists for
+> scripts and other API consumers.
+
+### `DELETE /api/v1/accounts/{id}`
+
+Disconnects an account: revokes the grant at Google, drops the cached access
+token, and deletes the row. Responds `204`.
+
+Revocation is **best effort**. If Google is unreachable the local row is still
+deleted — an outage must not trap credentials on your server. The failure is
+logged, not returned.
+
+`404 not_found` if the account does not belong to the caller. Account IDs are
+always scoped by `user_id`; an ID alone grants nothing.
+
+### `PATCH /api/v1/accounts/order`
+
+Sets the display order of the account cards.
+
+```json
+{ "account_ids": ["acc_9b21", "acc_7f3a", "acc_1c44"] }
+```
+
+Must list **all** of the caller's accounts exactly once — a partial list would
+leave cards with duplicate positions. `422 validation_failed` otherwise. Responds
+`204`.
+
+Not applied in a transaction: display order is cosmetic, and a half-applied order
+is corrected by the next move.
+
+### Account limit
+
+A user may connect up to **50** Google accounts. "Unlimited" is the product
+promise, but an unbounded fan-out means one Google call per account per request;
+this is a sanity ceiling, not a product limit. Exceeding it returns `409 conflict`
+at connection time.
+
+---
+
 ## Planned
 
 | Phase | Endpoint                                    | Purpose                                    |
 | ----- | ------------------------------------------- | ------------------------------------------ |
-| 3     | `GET /accounts`                             | Connected accounts with live quota         |
-| 3     | `POST /accounts/{id}/reconnect`             | Re-run consent for one account             |
-| 3     | `POST /accounts/{id}/upgrade`               | `drive.file` → `drive`                     |
-| 3     | `DELETE /accounts/{id}`                     | Disconnect and delete the stored token     |
-| 3     | `GET /storage`                              | Aggregate usage across all accounts        |
 | 4     | `GET /files`                                | Unified listing; `?account_id&parent&page` |
 | 4     | `POST /files/folder`                        | Create a folder                            |
 | 4     | `PATCH /files/{account}/{id}`               | Rename, star, move, trash                  |

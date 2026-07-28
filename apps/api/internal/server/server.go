@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/accounts"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/apperr"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/auth"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/config"
@@ -24,13 +25,14 @@ type BuildInfo struct {
 
 // Deps are everything a Server needs. Constructed in main, never global.
 type Deps struct {
-	Config *config.Config
-	Logger *slog.Logger
-	Store  store.Store
-	Crypto *cryptobox.Box
-	Auth   *auth.Service
-	Google google.Provider
-	Build  BuildInfo
+	Config   *config.Config
+	Logger   *slog.Logger
+	Store    store.Store
+	Crypto   *cryptobox.Box
+	Auth     *auth.Service
+	Google   google.Provider
+	Accounts *accounts.Service
+	Build    BuildInfo
 }
 
 // Server owns the Fiber app and its dependencies.
@@ -104,7 +106,14 @@ func (s *Server) registerRoutes() {
 	authed.Post("/logout", s.handleLogout)
 	authed.Post("/logout-all", s.handleLogoutAll)
 
-	// phase 3+ mounts /accounts, /files, /search, /upload, /storage here
+	api := v1.Group("", s.requireCSRF, s.requireSession)
+	api.Get("/accounts", s.handleListAccounts)
+	// registered before /accounts/:id so the static segment wins
+	api.Patch("/accounts/order", s.handleReorderAccounts)
+	api.Delete("/accounts/:id", s.handleDisconnectAccount)
+	api.Get("/storage", s.handleStorage)
+
+	// phase 4+ mounts /files, /search, /upload here
 
 	s.app.Use(func(c *fiber.Ctx) error {
 		return apperr.NotFound("That endpoint does not exist.")

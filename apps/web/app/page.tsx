@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 const PHASES = [
   { n: 1, title: 'Project scaffold', done: true },
   { n: 2, title: 'Authentication', done: true },
-  { n: 3, title: 'Account management', done: false },
+  { n: 3, title: 'Account management', done: true },
   { n: 4, title: 'Unified browser', done: false },
   { n: 5, title: 'Uploads', done: false },
   { n: 6, title: 'Downloads', done: false },

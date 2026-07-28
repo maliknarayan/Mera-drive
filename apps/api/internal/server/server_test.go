@@ -8,12 +8,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/accounts"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/auth"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/config"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/cryptobox"
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/google"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/httpx"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/store/sqlite"
 )
@@ -26,6 +29,64 @@ type harness struct {
 	store  *sqlite.Store
 	auth   *auth.Service
 	google *fakeGoogle
+	tokens *stubTokens
+	drive  *stubDrive
+}
+
+// stubTokens stands in for google.TokenManager.
+type stubTokens struct {
+	mu     sync.Mutex
+	errFor map[string]error
+	forgot []string
+}
+
+func newStubTokens() *stubTokens { return &stubTokens{errFor: map[string]error{}} }
+
+func (s *stubTokens) AccessToken(_ context.Context, accountID, refreshToken string) (string, error) {
+	s.mu.Lock()
+	err := s.errFor[accountID]
+	s.mu.Unlock()
+
+	if err != nil {
+		return "", err
+	}
+	return "access-for-" + refreshToken, nil
+}
+
+func (s *stubTokens) Forget(accountID string) {
+	s.mu.Lock()
+	s.forgot = append(s.forgot, accountID)
+	s.mu.Unlock()
+}
+
+// stubDrive stands in for google.Drive.
+type stubDrive struct {
+	mu       sync.Mutex
+	quotaFor map[string]google.StorageQuota
+	errFor   map[string]error
+}
+
+func newStubDrive() *stubDrive {
+	return &stubDrive{
+		quotaFor: map[string]google.StorageQuota{},
+		errFor:   map[string]error{},
+	}
+}
+
+func (s *stubDrive) About(_ context.Context, accessToken string) (*google.About, error) {
+	s.mu.Lock()
+	err := s.errFor[accessToken]
+	quota, ok := s.quotaFor[accessToken]
+	s.mu.Unlock()
+
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		limit := int64(15 * 1024 * 1024 * 1024)
+		quota = google.StorageQuota{Limit: &limit, Usage: 1024}
+	}
+	return &google.About{Quota: quota}, nil
 }
 
 func newHarness(t *testing.T) *harness {
@@ -51,25 +112,37 @@ func newHarness(t *testing.T) *harness {
 
 	authService := auth.NewService(st, box, auth.CookieOptions{}, time.Hour)
 	fake := newFakeGoogle(t)
+	tokens := newStubTokens()
+	drive := newStubDrive()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	accountService := accounts.NewService(st, authService, tokens, drive, fake,
+		accounts.Config{Concurrency: 4, Timeout: 2 * time.Second}, logger)
 
 	srv := New(Deps{
 		Config: &config.Config{
-			Env:             config.EnvDevelopment,
-			AppBaseURL:      testAppBaseURL,
-			CORSOrigins:     []string{testAppBaseURL},
-			RateLimitMax:    1000,
-			RateLimitWindow: time.Minute,
-			SessionTTL:      time.Hour,
+			Env:              config.EnvDevelopment,
+			AppBaseURL:       testAppBaseURL,
+			CORSOrigins:      []string{testAppBaseURL},
+			RateLimitMax:     1000,
+			RateLimitWindow:  time.Minute,
+			SessionTTL:       time.Hour,
+			DriveConcurrency: 4,
+			DriveTimeout:     2 * time.Second,
 		},
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Store:  st,
-		Crypto: box,
-		Auth:   authService,
-		Google: fake,
-		Build:  BuildInfo{Version: "test"},
+		Logger:   logger,
+		Store:    st,
+		Crypto:   box,
+		Auth:     authService,
+		Google:   fake,
+		Accounts: accountService,
+		Build:    BuildInfo{Version: "test"},
 	})
 
-	return &harness{server: srv, store: st, auth: authService, google: fake}
+	return &harness{
+		server: srv, store: st, auth: authService,
+		google: fake, tokens: tokens, drive: drive,
+	}
 }
 
 func newTestServer(t *testing.T) *Server {

@@ -300,6 +300,11 @@ func (s *Server) upsertAccount(
 		if err != nil {
 			return nil, apperr.Internal("Could not read your connected accounts.").WithCause(err)
 		}
+		if len(siblings) >= maxAccountsPerUser {
+			return nil, apperr.Conflict(
+				"You have reached the limit of %d connected accounts.", maxAccountsPerUser,
+			)
+		}
 
 		now := time.Now().UTC()
 		account := &store.Account{

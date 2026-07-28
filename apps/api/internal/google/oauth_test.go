@@ -181,6 +181,50 @@ func TestExchangeMapsGoogleErrors(t *testing.T) {
 	}
 }
 
+func TestRefreshMintsANewAccessToken(t *testing.T) {
+	fake := newFakeGoogle(t)
+
+	token, err := fake.authenticator().Refresh(context.Background(), "stored-refresh-token")
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if token.AccessToken != "access-token" {
+		t.Errorf("unexpected access token: %q", token.AccessToken)
+	}
+	// the caller's stored token is echoed back so it can be reused
+	if token.RefreshToken != "stored-refresh-token" {
+		t.Errorf("unexpected refresh token: %q", token.RefreshToken)
+	}
+	if fake.lastTokenForm.Get("grant_type") != "refresh_token" {
+		t.Errorf("unexpected grant_type: %q", fake.lastTokenForm.Get("grant_type"))
+	}
+}
+
+func TestRefreshWithARevokedTokenAsksForReconnect(t *testing.T) {
+	fake := newFakeGoogle(t)
+	fake.tokenStatus = http.StatusBadRequest
+	fake.tokenBody = map[string]any{"error": "invalid_grant"}
+
+	_, err := fake.authenticator().Refresh(context.Background(), "revoked")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if got := apperr.From(err).Code; got != apperr.CodeReauthRequired {
+		t.Errorf("got %q want %q", got, apperr.CodeReauthRequired)
+	}
+}
+
+func TestRefreshRejectsAnEmptyToken(t *testing.T) {
+	fake := newFakeGoogle(t)
+
+	if _, err := fake.authenticator().Refresh(context.Background(), ""); err == nil {
+		t.Fatal("expected an error")
+	}
+	if fake.lastTokenForm != nil {
+		t.Error("expected no call to Google")
+	}
+}
+
 func TestProfileReadsUserInfo(t *testing.T) {
 	fake := newFakeGoogle(t)
 

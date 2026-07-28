@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/accounts"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/auth"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/config"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/cryptobox"
@@ -89,14 +90,25 @@ func run() error {
 		cfg.GoogleRedirectURL(),
 	)
 
+	// access tokens are cached in memory only; they are never written to disk
+	tokens := google.NewTokenManager(googleAuth)
+	drive := google.NewDrive()
+
+	accountService := accounts.NewService(st, authService, tokens, drive, googleAuth,
+		accounts.Config{
+			Concurrency: cfg.DriveConcurrency,
+			Timeout:     cfg.DriveTimeout,
+		}, log)
+
 	srv := server.New(server.Deps{
-		Config: cfg,
-		Logger: log,
-		Store:  st,
-		Crypto: box,
-		Auth:   authService,
-		Google: googleAuth,
-		Build:  server.BuildInfo{Version: version, Commit: commit, Built: built},
+		Config:   cfg,
+		Logger:   log,
+		Store:    st,
+		Crypto:   box,
+		Auth:     authService,
+		Google:   googleAuth,
+		Accounts: accountService,
+		Build:    server.BuildInfo{Version: version, Commit: commit, Built: built},
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
