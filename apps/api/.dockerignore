@@ -1,0 +1,8 @@
+bin/
+data/
+coverage.out
+*.db
+*.db-shm
+*.db-wal
+Makefile
+.golangci.yml

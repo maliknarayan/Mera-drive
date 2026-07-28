@@ -1,0 +1,167 @@
+@import 'tailwindcss';
+
+/* next-themes toggles the .dark class on <html> */
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(0.995 0 0);
+  --foreground: oklch(0.21 0.02 264);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.02 264);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.02 264);
+
+  --primary: oklch(0.55 0.19 264);
+  --primary-foreground: oklch(0.985 0 0);
+
+  --secondary: oklch(0.968 0.004 264);
+  --secondary-foreground: oklch(0.28 0.02 264);
+
+  --muted: oklch(0.968 0.004 264);
+  --muted-foreground: oklch(0.55 0.015 264);
+
+  --accent: oklch(0.955 0.012 264);
+  --accent-foreground: oklch(0.28 0.02 264);
+
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  --success: oklch(0.6 0.15 152);
+  --warning: oklch(0.72 0.16 75);
+
+  --border: oklch(0.92 0.005 264);
+  --input: oklch(0.92 0.005 264);
+  --ring: oklch(0.55 0.19 264);
+
+  /* per-account accent colours, assigned round-robin in the file browser */
+  --drive-1: oklch(0.62 0.18 258);
+  --drive-2: oklch(0.66 0.16 155);
+  --drive-3: oklch(0.7 0.17 60);
+  --drive-4: oklch(0.62 0.2 350);
+  --drive-5: oklch(0.64 0.16 200);
+}
+
+.dark {
+  --background: oklch(0.17 0.012 264);
+  --foreground: oklch(0.96 0.003 264);
+
+  --card: oklch(0.21 0.014 264);
+  --card-foreground: oklch(0.96 0.003 264);
+
+  --popover: oklch(0.21 0.014 264);
+  --popover-foreground: oklch(0.96 0.003 264);
+
+  --primary: oklch(0.68 0.17 264);
+  --primary-foreground: oklch(0.18 0.02 264);
+
+  --secondary: oklch(0.27 0.016 264);
+  --secondary-foreground: oklch(0.96 0.003 264);
+
+  --muted: oklch(0.27 0.016 264);
+  --muted-foreground: oklch(0.7 0.015 264);
+
+  --accent: oklch(0.3 0.018 264);
+  --accent-foreground: oklch(0.96 0.003 264);
+
+  --destructive: oklch(0.65 0.2 25);
+  --destructive-foreground: oklch(0.98 0 0);
+
+  --success: oklch(0.68 0.15 152);
+  --warning: oklch(0.78 0.15 75);
+
+  --border: oklch(0.3 0.014 264);
+  --input: oklch(0.32 0.014 264);
+  --ring: oklch(0.68 0.17 264);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-drive-1: var(--drive-1);
+  --color-drive-2: var(--drive-2);
+  --color-drive-3: var(--drive-3);
+  --color-drive-4: var(--drive-4);
+  --color-drive-5: var(--drive-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-synthesis-weight: none;
+  }
+
+  /* keep focus visible — never replace with outline: none */
+  :focus-visible {
+    @apply outline-ring outline-2 outline-offset-2;
+  }
+}
+
+@layer utilities {
+  /* shimmer used by skeleton loaders */
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  .animate-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklch, var(--foreground) 6%, transparent),
+      transparent
+    );
+    animation: shimmer 1.8s infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

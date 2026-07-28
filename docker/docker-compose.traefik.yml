@@ -1,0 +1,48 @@
+name: sangamdrive
+
+# Traefik variant. Run alongside the base file:
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.traefik.yml up -d
+#
+# Assumes an existing Traefik instance on an external network named `proxy`
+# with an ACME certificate resolver named `letsencrypt`.
+#
+# Set in .env:
+#   API_BASE_URL=https://drive.example.com
+#   APP_BASE_URL=https://drive.example.com
+#   CORS_ORIGINS=https://drive.example.com
+#   NEXT_PUBLIC_API_BASE_URL=https://drive.example.com
+#   COOKIE_SECURE=true
+#   TRUST_PROXY=true
+#   SANGAM_HOST=drive.example.com
+
+services:
+  api:
+    # the reverse proxy is the only ingress
+    ports: !override []
+    networks:
+      - proxy
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: proxy
+      traefik.http.routers.sangam-api.rule: Host(`${SANGAM_HOST}`) && PathPrefix(`/api`)
+      traefik.http.routers.sangam-api.entrypoints: websecure
+      traefik.http.routers.sangam-api.tls.certresolver: letsencrypt
+      traefik.http.services.sangam-api.loadbalancer.server.port: '8080'
+      # long-running uploads and downloads must not be cut short
+      traefik.http.services.sangam-api.loadbalancer.responseforwarding.flushinterval: 100ms
+
+  web:
+    ports: !override []
+    networks:
+      - proxy
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: proxy
+      traefik.http.routers.sangam-web.rule: Host(`${SANGAM_HOST}`)
+      traefik.http.routers.sangam-web.entrypoints: websecure
+      traefik.http.routers.sangam-web.tls.certresolver: letsencrypt
+      traefik.http.services.sangam-web.loadbalancer.server.port: '3000'
+
+networks:
+  proxy:
+    external: true

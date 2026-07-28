@@ -1,0 +1,78 @@
+# SangamDrive behind Nginx.
+#
+# Both apps sit on one hostname: the web app at / and the API at /api.
+# Keeping them same-origin avoids third-party cookie problems entirely.
+#
+# Set in .env to match:
+#   API_BASE_URL=https://drive.example.com
+#   APP_BASE_URL=https://drive.example.com
+#   CORS_ORIGINS=https://drive.example.com
+#   NEXT_PUBLIC_API_BASE_URL=https://drive.example.com
+#   COOKIE_SECURE=true
+#   TRUST_PROXY=true
+
+upstream sangamdrive_api {
+    server 127.0.0.1:8080;
+    keepalive 32;
+}
+
+upstream sangamdrive_web {
+    server 127.0.0.1:3000;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name drive.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name drive.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/drive.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/drive.example.com/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # uploads stream straight through to Google, so never buffer or cap them
+    client_max_body_size 0;
+    proxy_request_buffering off;
+    proxy_buffering off;
+
+    # a large upload or download may legitimately run for a long time
+    proxy_read_timeout  3600s;
+    proxy_send_timeout  3600s;
+
+    location /api/ {
+        proxy_pass http://sangamdrive_api;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+    }
+
+    location = /healthz {
+        proxy_pass http://sangamdrive_api;
+        access_log off;
+    }
+
+    location / {
+        proxy_pass http://sangamdrive_web;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        "upgrade";
+    }
+}

@@ -1,0 +1,29 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# node
+node_modules/
+.next/
+out/
+packages/*/dist/
+*.tsbuildinfo
+.turbo/
+
+# go
+bin/
+coverage.out
+
+# editors / os
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

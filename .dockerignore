@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+**/node_modules
+**/.next
+**/dist
+apps/api/bin
+data
+docs
+*.md
+!README.md
+.env
+.env.*
+!.env.example
