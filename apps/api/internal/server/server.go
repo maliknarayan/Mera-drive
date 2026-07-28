@@ -7,8 +7,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/apperr"
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/auth"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/config"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/cryptobox"
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/google"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/httpx"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/store"
 )
@@ -26,6 +28,8 @@ type Deps struct {
 	Logger *slog.Logger
 	Store  store.Store
 	Crypto *cryptobox.Box
+	Auth   *auth.Service
+	Google google.Provider
 	Build  BuildInfo
 }
 
@@ -89,7 +93,18 @@ func (s *Server) registerRoutes() {
 
 	v1.Get("/meta", s.handleMeta)
 
-	// phase 2+ mounts /auth, /accounts, /files, /search, /upload, /storage here
+	// the OAuth entry and exit points are browser navigations, not API calls:
+	// no session yet on login, and no CSRF token available on the way back
+	oauth := v1.Group("/auth/google")
+	oauth.Get("/start", s.handleAuthStart)
+	oauth.Get("/callback", s.handleAuthCallback)
+
+	authed := v1.Group("/auth", s.requireCSRF, s.requireSession)
+	authed.Get("/session", s.handleAuthSession)
+	authed.Post("/logout", s.handleLogout)
+	authed.Post("/logout-all", s.handleLogoutAll)
+
+	// phase 3+ mounts /accounts, /files, /search, /upload, /storage here
 
 	s.app.Use(func(c *fiber.Ctx) error {
 		return apperr.NotFound("That endpoint does not exist.")

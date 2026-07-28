@@ -29,12 +29,12 @@ on each request. There is no metadata database to go stale, leak, or migrate.
 
 ## Status
 
-Built in phases. Current: **Phase 1 — project scaffold**.
+Built in phases. Current: **Phase 2 — authentication**.
 
 | Phase | Scope                                | State |
 | ----- | ------------------------------------ | ----- |
 | 1     | Project scaffold                     | done  |
-| 2     | Authentication (Google OAuth)        | —     |
+| 2     | Authentication (Google OAuth)        | done  |
 | 3     | Account management                   | —     |
 | 4     | Unified file browser                 | —     |
 | 5     | Streaming uploads                    | —     |

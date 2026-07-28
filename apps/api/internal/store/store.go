@@ -93,14 +93,14 @@ type Account struct {
 
 // Session is a browser login. Only the hash of the session token is stored.
 type Session struct {
-	ID        string
-	UserID    string
-	TokenHash string
-	UserAgent string
-	IPAddress string
-	CreatedAt time.Time
+	ID         string
+	UserID     string
+	TokenHash  string
+	UserAgent  string
+	IPAddress  string
+	CreatedAt  time.Time
 	LastSeenAt time.Time
-	ExpiresAt time.Time
+	ExpiresAt  time.Time
 }
 
 // Expired reports whether the session is past its expiry.

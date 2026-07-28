@@ -11,8 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/auth"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/config"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/cryptobox"
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/google"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/logging"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/server"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/store/sqlite"
@@ -76,11 +78,24 @@ func run() error {
 	}
 	log.Info("schema up to date", slog.String("path", cfg.SQLitePath))
 
+	authService := auth.NewService(st, box, auth.CookieOptions{
+		Domain: cfg.CookieDomain,
+		Secure: cfg.CookieSecure,
+	}, cfg.SessionTTL)
+
+	googleAuth := google.NewAuthenticator(
+		cfg.GoogleClientID,
+		cfg.GoogleClientSecret,
+		cfg.GoogleRedirectURL(),
+	)
+
 	srv := server.New(server.Deps{
 		Config: cfg,
 		Logger: log,
 		Store:  st,
 		Crypto: box,
+		Auth:   authService,
+		Google: googleAuth,
 		Build:  server.BuildInfo{Version: version, Commit: commit, Built: built},
 	})
 

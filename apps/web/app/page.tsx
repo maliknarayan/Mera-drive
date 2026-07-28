@@ -1,13 +1,16 @@
 import { HardDrive } from 'lucide-react';
+import { Suspense } from 'react';
 
 import { ApiStatus } from '@/components/api-status';
+import { AuthCallbackBanner } from '@/components/auth/auth-callback-banner';
+import { AuthPanel } from '@/components/auth/auth-panel';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 /** Roadmap shown until the real dashboard lands in phase 3. */
 const PHASES = [
   { n: 1, title: 'Project scaffold', done: true },
-  { n: 2, title: 'Authentication', done: false },
+  { n: 2, title: 'Authentication', done: true },
   { n: 3, title: 'Account management', done: false },
   { n: 4, title: 'Unified browser', done: false },
   { n: 5, title: 'Uploads', done: false },
@@ -47,60 +50,73 @@ export default function HomePage() {
           <ApiStatus />
         </div>
 
-        <div className="mt-10 grid gap-4 sm:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Build progress</CardTitle>
-              <CardDescription>SangamDrive is being built one phase at a time.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ol className="space-y-1.5 text-sm">
-                {PHASES.map((phase) => (
-                  <li key={phase.n} className="flex items-center gap-3">
-                    <span
-                      className={
-                        phase.done
-                          ? 'size-1.5 rounded-full bg-[var(--success)]'
-                          : 'size-1.5 rounded-full bg-muted-foreground/40'
-                      }
-                      aria-hidden
-                    />
-                    <span className={phase.done ? '' : 'text-muted-foreground'}>
-                      Phase {phase.n} — {phase.title}
-                    </span>
-                    {phase.done && <span className="sr-only">complete</span>}
-                  </li>
-                ))}
-              </ol>
-            </CardContent>
-          </Card>
+        {/* useSearchParams needs a boundary so the page can stay statically rendered */}
+        <div className="mt-8 max-w-md">
+          <Suspense fallback={null}>
+            <AuthCallbackBanner />
+          </Suspense>
+        </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>What gets stored</CardTitle>
-              <CardDescription>
-                SangamDrive is a frontend over the Drive API, not storage.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <div>
-                <p className="font-medium">Stored on this server</p>
-                <ul className="mt-1 list-inside list-disc text-muted-foreground">
-                  <li>Your user record</li>
-                  <li>Encrypted Google refresh tokens</li>
-                  <li>UI preferences and sessions</li>
-                </ul>
-              </div>
-              <div>
-                <p className="font-medium">Never stored</p>
-                <ul className="mt-1 list-inside list-disc text-muted-foreground">
-                  <li>File contents</li>
-                  <li>File metadata or thumbnails</li>
-                  <li>Search indexes</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="mt-6 grid items-start gap-6 lg:grid-cols-2">
+          <AuthPanel />
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+            <Card>
+              <CardHeader>
+                <CardTitle>Build progress</CardTitle>
+                <CardDescription>
+                  SangamDrive is being built one phase at a time.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ol className="space-y-1.5 text-sm">
+                  {PHASES.map((phase) => (
+                    <li key={phase.n} className="flex items-center gap-3">
+                      <span
+                        className={
+                          phase.done
+                            ? 'size-1.5 rounded-full bg-[var(--success)]'
+                            : 'size-1.5 rounded-full bg-muted-foreground/40'
+                        }
+                        aria-hidden
+                      />
+                      <span className={phase.done ? '' : 'text-muted-foreground'}>
+                        Phase {phase.n} — {phase.title}
+                      </span>
+                      {phase.done && <span className="sr-only">complete</span>}
+                    </li>
+                  ))}
+                </ol>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>What gets stored</CardTitle>
+                <CardDescription>
+                  SangamDrive is a frontend over the Drive API, not storage.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                <div>
+                  <p className="font-medium">Stored on this server</p>
+                  <ul className="mt-1 list-inside list-disc text-muted-foreground">
+                    <li>Your user record</li>
+                    <li>Encrypted Google refresh tokens</li>
+                    <li>UI preferences and sessions</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-medium">Never stored</p>
+                  <ul className="mt-1 list-inside list-disc text-muted-foreground">
+                    <li>File contents</li>
+                    <li>File metadata or thumbnails</li>
+                    <li>Search indexes</li>
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </main>
     </div>

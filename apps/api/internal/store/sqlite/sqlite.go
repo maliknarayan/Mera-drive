@@ -311,10 +311,10 @@ func scanAccountRow(row *sql.Row) (*store.Account, error) { return scanAccount(r
 
 func scanAccount(sc scanner) (*store.Account, error) {
 	var (
-		a                       store.Account
-		scope, status           string
-		connectedAt, updatedAt  string
-		lastUsedAt              sql.NullString
+		a                      store.Account
+		scope, status          string
+		connectedAt, updatedAt string
+		lastUsedAt             sql.NullString
 	)
 	err := sc.Scan(&a.ID, &a.UserID, &a.GoogleUserID, &a.Email, &a.Name, &a.AvatarURL,
 		&scope, &status, &a.RefreshTokenEnc, &a.SortOrder,
@@ -360,8 +360,8 @@ func (s *Store) GetSessionByTokenHash(ctx context.Context, tokenHash string) (*s
 		`SELECT `+sessionColumns+` FROM sessions WHERE token_hash = ?`, tokenHash)
 
 	var (
-		sess                              store.Session
-		createdAt, lastSeenAt, expiresAt  string
+		sess                             store.Session
+		createdAt, lastSeenAt, expiresAt string
 	)
 	err := row.Scan(&sess.ID, &sess.UserID, &sess.TokenHash, &sess.UserAgent,
 		&sess.IPAddress, &createdAt, &lastSeenAt, &expiresAt)

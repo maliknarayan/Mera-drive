@@ -15,10 +15,10 @@ import (
 //
 // Exactly one of Data and Error is present.
 type Envelope struct {
-	Data      any            `json:"data,omitempty"`
-	Meta      any            `json:"meta,omitempty"`
-	Error     *apperr.Error  `json:"error,omitempty"`
-	RequestID string         `json:"request_id,omitempty"`
+	Data      any           `json:"data,omitempty"`
+	Meta      any           `json:"meta,omitempty"`
+	Error     *apperr.Error `json:"error,omitempty"`
+	RequestID string        `json:"request_id,omitempty"`
 }
 
 // Meta carries pagination cursors and partial-failure information. Fan-out

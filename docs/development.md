@@ -16,17 +16,20 @@ apps/
     cmd/server/               entrypoint, graceful shutdown
     internal/
       apperr/                 the error type crossing the HTTP boundary
+      auth/                   sessions, CSRF, OAuth state, cookies
       config/                 env parsing and validation
       cryptobox/              AES-GCM, HMAC, token hashing
+      google/                 Google OAuth client (injectable endpoints)
       httpx/                  envelope, middleware, error renderer
       logging/                slog setup
-      server/                 Fiber app and route registration
+      server/                 Fiber app, middleware, route handlers
       store/                  persistence interfaces
         sqlite/               the one implementation, plus migrations
   web/                        Next.js frontend
     app/                      App Router pages and providers
     components/               UI, with primitives under components/ui
-    lib/                      API client, query client, helpers
+      auth/                   sign-in, session and callback UI
+    lib/                      API client, query client, auth hooks
 packages/
   shared/                     TypeScript types mirroring the Go DTOs
 docker/                       compose files and reverse-proxy examples

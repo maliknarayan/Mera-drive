@@ -74,14 +74,14 @@ func Load() (*Config, error) {
 	fail := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
 
 	cfg := &Config{
-		Env:              Environment(str("SANGAM_ENV", string(EnvDevelopment))),
-		LogLevel:         strings.ToLower(str("LOG_LEVEL", "info")),
-		APIBaseURL:       str("API_BASE_URL", "http://localhost:8080"),
-		AppBaseURL:       str("APP_BASE_URL", "http://localhost:3000"),
-		CookieDomain:     str("COOKIE_DOMAIN", ""),
-		StoreDriver:      strings.ToLower(str("STORE_DRIVER", "sqlite")),
-		SQLitePath:       str("SQLITE_PATH", "./data/sangamdrive.db"),
-		GoogleClientID:   str("GOOGLE_CLIENT_ID", ""),
+		Env:                Environment(str("SANGAM_ENV", string(EnvDevelopment))),
+		LogLevel:           strings.ToLower(str("LOG_LEVEL", "info")),
+		APIBaseURL:         str("API_BASE_URL", "http://localhost:8080"),
+		AppBaseURL:         str("APP_BASE_URL", "http://localhost:3000"),
+		CookieDomain:       str("COOKIE_DOMAIN", ""),
+		StoreDriver:        strings.ToLower(str("STORE_DRIVER", "sqlite")),
+		SQLitePath:         str("SQLITE_PATH", "./data/sangamdrive.db"),
+		GoogleClientID:     str("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret: str("GOOGLE_CLIENT_SECRET", ""),
 	}
 

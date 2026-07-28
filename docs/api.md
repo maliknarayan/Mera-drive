@@ -3,9 +3,9 @@
 Base path: `/api/v1`. All responses are JSON unless the endpoint streams file
 bytes.
 
-> Phase 1 implements the probes and `/meta` only. Remaining endpoints are listed
-> under [Planned](#planned) with the shape they will take, so the client contract
-> is stable to build against.
+> Phases 1–2 are implemented: probes, `/meta`, and the full authentication
+> surface. Remaining endpoints are listed under [Planned](#planned) with the shape
+> they will take, so the client contract is stable to build against.
 
 ## Conventions
 
@@ -112,14 +112,107 @@ Build and environment information.
 
 ---
 
+## Authentication endpoints
+
+### `GET /api/v1/auth/google/start`
+
+Begins the OAuth flow. This is a **browser navigation**, not an API call — it sets
+an `HttpOnly` state cookie and responds `302` to Google's consent screen.
+
+| Parameter    | Required            | Values                                     |
+| ------------ | ------------------- | ------------------------------------------ |
+| `intent`     | no (default `login`) | `login`, `link`, `reconnect`, `upgrade`   |
+| `scope`      | no (default `drive.file`) | `drive.file`, `drive`                |
+| `account_id` | `reconnect`, `upgrade` | Connected account to act on             |
+| `next`       | no                  | Site-relative path to return to            |
+
+| Intent      | Session | Notes                                                     |
+| ----------- | ------- | --------------------------------------------------------- |
+| `login`     | not required | Finds or creates the user, links the account         |
+| `link`      | required | Adds another Google account to the signed-in user       |
+| `reconnect` | required | Replaces a rejected refresh token                       |
+| `upgrade`   | required | `drive.file` → `drive`; `scope` must be `drive`          |
+
+Errors are returned as JSON (`400`, `401`, `404`) because the user has not left
+the app yet.
+
+`next` is validated server-side: anything that is not a site-relative path — an
+absolute URL, `//host`, a value containing CR/LF — is replaced with `/`.
+
+### `GET /api/v1/auth/google/callback`
+
+Google's redirect target. Always responds `302` back to `APP_BASE_URL`, because
+the browser is mid-navigation and a JSON body would be a dead end.
+
+On success the redirect carries:
+
+```
+?auth=login&account=you@example.com
+```
+
+On failure it carries a stable code plus a message safe to display:
+
+```
+?auth_error=insufficient_scope&auth_message=The+requested+Drive+permission+was+not+granted.
+```
+
+Three checks must pass before anything is written: the state HMAC (this instance
+minted it), the state cookie nonce (this browser started it), and the 15-minute
+age limit (it is not a replayed link). The state cookie is cleared on arrival, so
+a given consent link works exactly once.
+
+The flow also refuses to proceed when Google returns no refresh token, when the
+email is unverified, or when the requested Drive scope was not actually granted.
+
+### `GET /api/v1/auth/session`
+
+Requires a session. Returns the signed-in user.
+
+```json
+{
+  "data": {
+    "user": {
+      "id": "9f1c…",
+      "email": "you@example.com",
+      "name": "You",
+      "avatar_url": "https://lh3.googleusercontent.com/…"
+    },
+    "expires_at": "2026-02-27T10:12:00Z"
+  }
+}
+```
+
+A `401` here is the normal answer for "signed out" — the web client treats it as
+a state, not an error.
+
+### `POST /api/v1/auth/logout`
+
+Requires a session and a CSRF token. Revokes this session server-side and clears
+both cookies. Responds `204`.
+
+### `POST /api/v1/auth/logout-all`
+
+As above, but revokes every session belonging to the user.
+
+### Cookies
+
+| Cookie           | Flags                            | Contents                          |
+| ---------------- | -------------------------------- | --------------------------------- |
+| `sangam_session` | `HttpOnly`, `SameSite=Lax`, `Secure`\* | Opaque token; only its SHA-256 hash is stored |
+| `sangam_csrf`    | `SameSite=Lax`, `Secure`\*       | `HMAC(session hash)` — readable by JS by design |
+| `sangam_oauth`   | `HttpOnly`, `SameSite=Lax`, `Secure`\*, 15 min | OAuth state nonce |
+
+\* `Secure` when `COOKIE_SECURE=true`, which is mandatory in production.
+
+`SameSite=Lax` rather than `Strict`: the OAuth callback is a top-level cross-site
+navigation, and `Strict` would withhold the session cookie on arrival.
+
+---
+
 ## Planned
 
 | Phase | Endpoint                                    | Purpose                                    |
 | ----- | ------------------------------------------- | ------------------------------------------ |
-| 2     | `GET /auth/google/start`                    | Begin OAuth; `?scope=drive.file\|drive`    |
-| 2     | `GET /auth/google/callback`                 | OAuth redirect target                      |
-| 2     | `GET /auth/session`                         | Current user, or 401                       |
-| 2     | `POST /auth/logout`                         | Revoke the current session                 |
 | 3     | `GET /accounts`                             | Connected accounts with live quota         |
 | 3     | `POST /accounts/{id}/reconnect`             | Re-run consent for one account             |
 | 3     | `POST /accounts/{id}/upgrade`               | `drive.file` → `drive`                     |
