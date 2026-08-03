@@ -23,6 +23,29 @@ export function formatBytes(bytes: number | null | undefined): string {
   return `${value.toFixed(digits)} ${BYTE_UNITS[exponent]}`;
 }
 
+/**
+ * Format a Drive timestamp the way a file browser does — a time for today, a
+ * month and day for this year, a full date beyond that.
+ */
+export function formatFileDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime()) || date.getTime() === 0) return '—';
+
+  const now = new Date();
+  const sameDay =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+
+  if (sameDay) {
+    return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 /** Percentage of a quota consumed, clamped to 0–100. Null quota means unlimited. */
 export function usagePercent(usage: number, limit: number | null): number | null {
   if (limit === null || limit <= 0) return null;

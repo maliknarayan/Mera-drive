@@ -6,6 +6,8 @@
  * browser on each request.
  */
 
+import type { ApiMeta } from './api.js';
+
 export const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 
 export const GOOGLE_DOC_MIME_TYPES = {
@@ -79,6 +81,14 @@ export interface Breadcrumb {
   name: string;
 }
 
+/**
+ * Listing metadata. Adds the breadcrumb trail, which is only present when the
+ * request opened one folder — a merged listing spans several Drive roots.
+ */
+export interface FileListMeta extends ApiMeta {
+  path?: Breadcrumb[];
+}
+
 /** Which slice of a Drive to list. */
 export type ListScope = 'children' | 'starred' | 'recent' | 'trash';
 
@@ -128,6 +138,20 @@ export function fileKindFromMimeType(mimeType: string): FileKind {
   if (ARCHIVE_MIME_TYPES.has(mimeType)) return 'archive';
   return 'other';
 }
+
+export const FILE_KIND_LABELS: Record<FileKind, string> = {
+  folder: 'Folder',
+  image: 'Image',
+  video: 'Video',
+  audio: 'Audio',
+  pdf: 'PDF',
+  text: 'Text',
+  archive: 'Archive',
+  gdoc: 'Google Doc',
+  gsheet: 'Google Sheet',
+  gslide: 'Google Slides',
+  other: 'File',
+};
 
 const ARCHIVE_MIME_TYPES = new Set([
   'application/zip',

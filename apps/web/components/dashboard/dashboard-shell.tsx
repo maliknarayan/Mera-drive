@@ -1,10 +1,9 @@
 'use client';
 
 import { TriangleAlert } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { Suspense, useEffect } from 'react';
+import { Suspense } from 'react';
 
-import { AppHeader } from '@/components/app-header';
+import { AppShell } from '@/components/app-shell';
 import { AuthCallbackBanner } from '@/components/auth/auth-callback-banner';
 import { AccountsGrid, AccountsGridSkeleton } from '@/components/dashboard/accounts-grid';
 import { StorageGraph } from '@/components/dashboard/storage-graph';
@@ -12,56 +11,17 @@ import { SummaryCards, SummaryCardsSkeleton } from '@/components/dashboard/summa
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAccounts } from '@/lib/accounts';
-import { useSession } from '@/lib/auth';
 
-/**
- * The dashboard, gated on a live session.
- *
- * Gating happens in the browser because the session cookie is scoped to the API
- * origin — a Next.js server component cannot see it, and proxying the check
- * through the Next server would put user data somewhere this app keeps clean.
- */
 export function DashboardShell() {
-  const { user, isPending, error } = useSession();
-  const router = useRouter();
-
-  const signedOut = !isPending && !error && user === null;
-
-  useEffect(() => {
-    if (signedOut) router.replace('/');
-  }, [signedOut, router]);
-
-  if (error) {
-    return (
-      <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
-        <Alert variant="destructive">
-          <TriangleAlert />
-          <div className="min-w-0">
-            <AlertTitle>Could not reach the SangamDrive API</AlertTitle>
-            <AlertDescription>{error.message}</AlertDescription>
-          </div>
-        </Alert>
-      </div>
-    );
-  }
-
-  if (isPending || signedOut || !user) {
-    return <ShellSkeleton />;
-  }
-
   return (
-    <div className="min-h-dvh">
-      <AppHeader user={user} />
+    <AppShell fallback={<OverviewSkeleton withHeading />}>
+      {/* useSearchParams needs a boundary of its own */}
+      <Suspense fallback={null}>
+        <AuthCallbackBanner />
+      </Suspense>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6">
-        {/* useSearchParams needs a boundary of its own */}
-        <Suspense fallback={null}>
-          <AuthCallbackBanner />
-        </Suspense>
-
-        <Overview />
-      </main>
-    </div>
+      <Overview />
+    </AppShell>
   );
 }
 
@@ -82,12 +42,7 @@ function Overview() {
   }
 
   if (isPending) {
-    return (
-      <div className="space-y-6">
-        <SummaryCardsSkeleton />
-        <AccountsGridSkeleton />
-      </div>
-    );
+    return <OverviewSkeleton />;
   }
 
   return (
@@ -116,11 +71,15 @@ function Overview() {
   );
 }
 
-function ShellSkeleton() {
+function OverviewSkeleton({ withHeading = false }: { withHeading?: boolean }) {
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-10 sm:px-6">
-      <Skeleton className="h-8 w-40" />
-      <Skeleton className="h-4 w-72" />
+    <div className="space-y-6">
+      {withHeading && (
+        <>
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-4 w-72" />
+        </>
+      )}
       <SummaryCardsSkeleton />
       <AccountsGridSkeleton />
     </div>

@@ -45,6 +45,16 @@ Next.js App Router. All Drive data is client-fetched through TanStack Query — 
 server components hold Drive state, because a server-rendered listing would mean
 the server briefly holds user file metadata.
 
+Routes: `/` signs in, `/dashboard` shows storage across every Drive, `/files` is
+the unified browser. Both signed-in pages share `AppShell`, which gates on the
+session in the browser — the session cookie is scoped to the API origin, so a
+server component cannot see it.
+
+The browser keeps its listing state in the URL (`account`, `parent`, `scope`,
+`sort`, `direction`, `view`) so back, forward and refresh behave, and a folder is
+a link. `parent` always travels with `account`: a folder id only means something
+inside its own Drive.
+
 ### apps/api
 
 Fiber. Deliberately thin. A handler's job is:

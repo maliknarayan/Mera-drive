@@ -29,14 +29,14 @@ on each request. There is no metadata database to go stale, leak, or migrate.
 
 ## Status
 
-Built in phases. Current: **Phase 4 — unified file browser**.
+Built in phases. Current: **Phase 5 — streaming uploads**.
 
 | Phase | Scope                                | State    |
 | ----- | ------------------------------------ | -------- |
 | 1     | Project scaffold                     | done     |
 | 2     | Authentication (Google OAuth)        | done     |
 | 3     | Account management                   | done     |
-| 4     | Unified file browser                 | API done |
+| 4     | Unified file browser                 | done     |
 | 5     | Streaming uploads                    | —        |
 | 6     | Streaming downloads                  | —        |
 | 7     | Concurrent global search             | —        |
