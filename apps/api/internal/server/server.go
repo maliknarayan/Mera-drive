@@ -11,6 +11,7 @@ import (
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/auth"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/config"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/cryptobox"
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/files"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/google"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/httpx"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/store"
@@ -32,6 +33,7 @@ type Deps struct {
 	Auth     *auth.Service
 	Google   google.Provider
 	Accounts *accounts.Service
+	Files    *files.Service
 	Build    BuildInfo
 }
 
@@ -113,7 +115,13 @@ func (s *Server) registerRoutes() {
 	api.Delete("/accounts/:id", s.handleDisconnectAccount)
 	api.Get("/storage", s.handleStorage)
 
-	// phase 4+ mounts /files, /search, /upload here
+	api.Get("/files", s.handleListFiles)
+	// registered before /files/:account/:id so the static segment wins
+	api.Post("/files/folder", s.handleCreateFolder)
+	api.Patch("/files/:account/:id", s.handleUpdateFile)
+	api.Delete("/files/:account/:id", s.handleDeleteFile)
+
+	// phase 5+ mounts /upload, /search here
 
 	s.app.Use(func(c *fiber.Ctx) error {
 		return apperr.NotFound("That endpoint does not exist.")

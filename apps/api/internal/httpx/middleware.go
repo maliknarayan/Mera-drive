@@ -89,7 +89,9 @@ func AccessLog(log *slog.Logger) fiber.Handler {
 // or streamed file bytes, so the CSP can be maximally restrictive.
 func SecureHeaders() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		h := c.Response().Header
+		// by pointer: Response().Header is a struct field, and a copy would
+		// swallow every Set below
+		h := &c.Response().Header
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
@@ -112,7 +114,7 @@ func CORS(allowed []string) fiber.Handler {
 		origin := strings.ToLower(strings.TrimRight(c.Get(fiber.HeaderOrigin), "/"))
 		if origin != "" {
 			if _, ok := set[origin]; ok {
-				h := c.Response().Header
+				h := &c.Response().Header
 				h.Set(fiber.HeaderAccessControlAllowOrigin, c.Get(fiber.HeaderOrigin))
 				h.Set(fiber.HeaderAccessControlAllowCredentials, "true")
 				h.Set(fiber.HeaderAccessControlAllowHeaders, "Content-Type, X-CSRF-Token, "+HeaderRequestID)

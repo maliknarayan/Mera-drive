@@ -336,14 +336,140 @@ at connection time.
 
 ---
 
+## File endpoints
+
+All require a session. Writes also require the CSRF header.
+
+Every listing is fetched **live** from Google on each request. No file metadata is
+cached or persisted anywhere, so there is nothing to invalidate and nothing to go
+stale.
+
+### `GET /api/v1/files`
+
+One page of files, merged across the caller's connected Drives.
+
+| Query       | Default    | Meaning                                                     |
+| ----------- | ---------- | ----------------------------------------------------------- |
+| `account_id` | all        | Restrict to one Drive                                       |
+| `parent`    | each root  | Folder to open. **Requires `account_id`**                   |
+| `scope`     | `children` | `children`, `starred`, `recent` or `trash`                   |
+| `sort`      | `name`     | `name`, `modified_at`, `size` or `account_email`             |
+| `direction` | `asc`      | `asc` or `desc`                                              |
+| `page_size` | `100`      | 1–500                                                        |
+| `page`      | —          | Opaque cursor from a previous `meta.next_page_token`         |
+
+```json
+{
+  "data": [
+    {
+      "id": "1AbCdEf",
+      "name": "Q1 report.pdf",
+      "mime_type": "application/pdf",
+      "kind": "pdf",
+      "size": 248113,
+      "modified_at": "2026-02-11T14:03:52Z",
+      "created_at": "2026-02-10T08:11:00Z",
+      "starred": false,
+      "trashed": false,
+      "shared": true,
+      "parents": ["0BxYz"],
+      "web_view_link": "https://drive.google.com/file/d/1AbCdEf/view",
+      "icon_link": "https://drive-thirdparty.googleusercontent.com/…",
+      "thumbnail_link": "https://lh3.googleusercontent.com/…",
+      "owner": { "display_name": "You", "email": "you@example.com", "photo_url": "…" },
+      "capabilities": { "can_edit": true, "can_rename": true, "can_delete": true,
+                        "can_trash": true, "can_share": true, "can_copy": true,
+                        "can_add_children": false },
+      "account_id": "acc_7f3a",
+      "account_email": "you@example.com"
+    }
+  ],
+  "meta": {
+    "count": 1,
+    "next_page_token": "eyJhY2NfN2YzYSI6IuKApiJ9",
+    "path": [{ "id": "0BxYz", "name": "Reports" }],
+    "errors": []
+  }
+}
+```
+
+`account_id` and `account_email` are on every file: without them the client cannot
+tell which Drive to act against.
+
+`capabilities` is forwarded from Google so the UI can disable actions Google would
+reject, rather than guessing from the account's scope.
+
+**Opening a folder is single-account.** A folder id only means something inside its
+own Drive, so `parent` without `account_id` is `400 bad_request`. `meta.path` is the
+breadcrumb trail, root-first, and is only present for a folder listing — a merged
+listing spans several roots.
+
+**Ordering is per page, not global.** Each Drive is asked for its own slice in the
+same order and the slices are merged. Google paginates per account and offers no
+cross-account cursor, so a globally sorted stream is not purchasable at any
+reasonable number of calls. Folders always lead, in both directions.
+
+**Pagination.** `meta.next_page_token` bundles one Google page token per account
+that still has more. Send it back as `page`; accounts absent from it are finished
+and are not called again. The cursor is **not signed** because it carries no
+authority: the account ids inside it are intersected with the caller's own accounts
+before use, so a forged cursor reaches nothing a plain request could not.
+
+`page_size` is split across the fan-out so a merged page stays near what was asked
+for, with a floor of 10 per Drive — a very wide fan-out can therefore overshoot.
+
+**Partial failure.** If one Drive fails, the response is still `200` with the files
+the others returned; the failure is in `meta.errors`, tagged with its `account_id`.
+A `reauth_required` failure also persists that status on the account.
+
+### `POST /api/v1/files/folder`
+
+```json
+{ "account_id": "acc_7f3a", "name": "Invoices", "parent_id": "0BxYz" }
+```
+
+Omit `parent_id` to create in that Drive's root. Responds `201` with the new folder
+in the same shape as a listing entry.
+
+Names are trimmed, must be non-empty, at most 255 characters, and may not contain a
+slash. Drive itself allows longer names, but one that long breaks as a filename on
+download.
+
+Not retried on a transient failure: a retried create would leave two folders behind.
+
+### `PATCH /api/v1/files/{account}/{id}`
+
+A partial update — every field is optional, and an absent field is left untouched.
+
+```json
+{ "name": "Q1 report final.pdf", "starred": true, "trashed": false, "parent_id": "0BnEw" }
+```
+
+`parent_id` moves the file. Drive has no move operation, so this becomes
+add-parent plus remove-every-current-parent, which costs one extra metadata read.
+An empty body is `422 validation_failed`.
+
+Responds `200` with the updated file.
+
+### `DELETE /api/v1/files/{account}/{id}`
+
+Trashes the file. Responds `204`.
+
+`?permanent=true` erases it instead, bypassing the trash. Trashing is the default
+because it is recoverable from Drive's own UI; permanent deletion is not, and
+Google offers no undo.
+
+### Ownership
+
+`{account}` is always resolved as `(user_id, account_id)`. An account id belonging
+to someone else is `404 not_found` — an id alone grants nothing.
+
+---
+
 ## Planned
 
 | Phase | Endpoint                                    | Purpose                                    |
 | ----- | ------------------------------------------- | ------------------------------------------ |
-| 4     | `GET /files`                                | Unified listing; `?account_id&parent&page` |
-| 4     | `POST /files/folder`                        | Create a folder                            |
-| 4     | `PATCH /files/{account}/{id}`               | Rename, star, move, trash                  |
-| 4     | `DELETE /files/{account}/{id}`              | Trash or permanently delete                |
 | 5     | `POST /upload`                              | Streaming resumable upload                 |
 | 6     | `GET /files/{account}/{id}/content`         | Streaming download                         |
 | 7     | `GET /search`                               | Concurrent search across every account     |

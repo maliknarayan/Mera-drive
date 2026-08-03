@@ -1,6 +1,7 @@
 package google
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -158,30 +159,74 @@ func (d *Drive) About(ctx context.Context, accessToken string) (*About, error) {
 	}, nil
 }
 
-// getJSON issues a GET against the Drive API and decodes the response.
-//
-// Retries are safe here because every caller is idempotent; mutating calls in
-// later phases must not reuse this path blindly.
+// callSpec describes one Drive API request.
+type callSpec struct {
+	method string
+	path   string
+	query  url.Values
+	// body is marshalled as JSON when non-nil.
+	body any
+	// idempotent allows the request to be retried. Creating a resource is not
+	// idempotent — retrying a folder create would make two folders.
+	idempotent bool
+}
+
+// getJSON issues a retryable GET and decodes the response.
 func (d *Drive) getJSON(ctx context.Context, accessToken, path string, query url.Values, out any) error {
-	target := strings.TrimRight(d.endpoints.BaseURL, "/") + path
-	if len(query) > 0 {
-		target += "?" + query.Encode()
+	return d.call(ctx, accessToken, callSpec{
+		method:     http.MethodGet,
+		path:       path,
+		query:      query,
+		idempotent: true,
+	}, out)
+}
+
+// call performs a Drive API request, retrying transient failures when the spec
+// says it is safe to do so.
+//
+// out may be nil for calls whose response body is not needed.
+func (d *Drive) call(ctx context.Context, accessToken string, spec callSpec, out any) error {
+	target := strings.TrimRight(d.endpoints.BaseURL, "/") + spec.path
+	if len(spec.query) > 0 {
+		target += "?" + spec.query.Encode()
+	}
+
+	var payload []byte
+	if spec.body != nil {
+		encoded, err := json.Marshal(spec.body)
+		if err != nil {
+			return apperr.Internal("Could not encode the Google Drive request.").WithCause(err)
+		}
+		payload = encoded
+	}
+
+	attempts := 1
+	if spec.idempotent {
+		attempts = maxAttempts
 	}
 
 	var lastErr error
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	for attempt := 0; attempt < attempts; attempt++ {
 		if attempt > 0 {
 			if err := sleepCtx(ctx, backoffFor(attempt, lastErr)); err != nil {
 				return mapTransportError(ctx, err)
 			}
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+		var reader io.Reader
+		if payload != nil {
+			reader = bytes.NewReader(payload)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, spec.method, target, reader)
 		if err != nil {
 			return apperr.Internal("Could not build the Google Drive request.").WithCause(err)
 		}
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 		req.Header.Set("Accept", "application/json")
+		if payload != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
 
 		resp, err := d.client.Do(req)
 		if err != nil {
@@ -189,11 +234,11 @@ func (d *Drive) getJSON(ctx context.Context, accessToken, path string, query url
 			continue
 		}
 
-		if resp.StatusCode == http.StatusOK {
-			err := json.NewDecoder(resp.Body).Decode(out)
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			decodeErr := decodeInto(resp, out)
 			_ = resp.Body.Close()
-			if err != nil {
-				return apperr.UpstreamUnavailable("Google Drive returned an unreadable response.").WithCause(err)
+			if decodeErr != nil {
+				return decodeErr
 			}
 			return nil
 		}
@@ -213,6 +258,17 @@ func (d *Drive) getJSON(ctx context.Context, accessToken, path string, query url
 		lastErr = apperr.UpstreamUnavailable("Google Drive did not respond.")
 	}
 	return lastErr
+}
+
+func decodeInto(resp *http.Response, out any) error {
+	if out == nil || resp.StatusCode == http.StatusNoContent {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBody))
+		return nil
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return apperr.UpstreamUnavailable("Google Drive returned an unreadable response.").WithCause(err)
+	}
+	return nil
 }
 
 // backoffFor returns the delay before the given attempt, honouring Retry-After

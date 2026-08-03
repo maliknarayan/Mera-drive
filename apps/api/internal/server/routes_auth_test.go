@@ -354,6 +354,8 @@ func TestLinkAddsASecondAccount(t *testing.T) {
 	token := h.login(t)
 
 	h.google.asGoogleAccount("google-sub-2", "second@example.test")
+	// the flow asks for full drive, so Google has to report granting it
+	h.google.grantScope(google.ScopeDriveFull)
 
 	_, flow := h.start(t, "intent=link&scope=drive", token)
 	if flow == nil {

@@ -35,6 +35,20 @@ export interface DriveFileOwner {
   photo_url: string;
 }
 
+/**
+ * What the owning account may do with a file, forwarded from Google so the UI can
+ * disable actions Google would reject rather than guessing from the granted scope.
+ */
+export interface DriveFileCapabilities {
+  can_edit: boolean;
+  can_rename: boolean;
+  can_delete: boolean;
+  can_trash: boolean;
+  can_share: boolean;
+  can_copy: boolean;
+  can_add_children: boolean;
+}
+
 export interface DriveFile {
   id: string;
   name: string;
@@ -53,6 +67,7 @@ export interface DriveFile {
   icon_link: string;
   thumbnail_link: string | null;
   owner: DriveFileOwner | null;
+  capabilities: DriveFileCapabilities;
 
   /** SangamDrive account this file belongs to — the key to unified browsing. */
   account_id: string;
@@ -62,6 +77,22 @@ export interface DriveFile {
 export interface Breadcrumb {
   id: string;
   name: string;
+}
+
+/** Which slice of a Drive to list. */
+export type ListScope = 'children' | 'starred' | 'recent' | 'trash';
+
+export interface ListFilesQuery {
+  /** Omit to fan out across every connected account. */
+  account_id?: string;
+  /** Folder to open. Requires account_id — a folder id is Drive-specific. */
+  parent?: string;
+  scope?: ListScope;
+  sort?: SortField;
+  direction?: SortDirection;
+  page_size?: number;
+  /** Opaque cursor from a previous response's meta.next_page_token. */
+  page?: string;
 }
 
 export type ViewMode = 'grid' | 'list';

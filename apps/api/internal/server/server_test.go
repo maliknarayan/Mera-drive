@@ -16,6 +16,7 @@ import (
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/auth"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/config"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/cryptobox"
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/files"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/google"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/httpx"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/store/sqlite"
@@ -64,13 +65,83 @@ type stubDrive struct {
 	mu       sync.Mutex
 	quotaFor map[string]google.StorageQuota
 	errFor   map[string]error
+
+	// filesFor is one canned page per access token, keyed the same way as quota.
+	filesFor map[string][]*google.File
+	// listErrFor fails the listing for one token, to exercise partial success.
+	listErrFor map[string]error
+	path       []google.PathSegment
+
+	created []google.CreateFolderRequest
+	updated []google.UpdateFileRequest
+	deleted []string
 }
 
 func newStubDrive() *stubDrive {
 	return &stubDrive{
-		quotaFor: map[string]google.StorageQuota{},
-		errFor:   map[string]error{},
+		quotaFor:   map[string]google.StorageQuota{},
+		errFor:     map[string]error{},
+		filesFor:   map[string][]*google.File{},
+		listErrFor: map[string]error{},
 	}
+}
+
+func (s *stubDrive) ListFiles(
+	_ context.Context, accessToken string, _ google.ListOptions,
+) (*google.FileList, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.listErrFor[accessToken]; err != nil {
+		return nil, err
+	}
+	return &google.FileList{Files: s.filesFor[accessToken]}, nil
+}
+
+func (s *stubDrive) GetFile(_ context.Context, _, fileID string) (*google.File, error) {
+	return &google.File{ID: fileID, Parents: []string{"old-parent"}}, nil
+}
+
+func (s *stubDrive) ResolvePath(_ context.Context, _, _ string) ([]google.PathSegment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.path, nil
+}
+
+func (s *stubDrive) CreateFolder(
+	_ context.Context, _ string, req google.CreateFolderRequest,
+) (*google.File, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.created = append(s.created, req)
+	return &google.File{ID: "folder-new", Name: req.Name, MimeType: google.FolderMimeType}, nil
+}
+
+func (s *stubDrive) UpdateFile(
+	_ context.Context, _, fileID string, req google.UpdateFileRequest,
+) (*google.File, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.updated = append(s.updated, req)
+
+	file := &google.File{ID: fileID, Name: "file.txt", MimeType: "text/plain"}
+	if req.Name != nil {
+		file.Name = *req.Name
+	}
+	if req.Trashed != nil {
+		file.Trashed = *req.Trashed
+	}
+	return file, nil
+}
+
+func (s *stubDrive) DeleteFile(_ context.Context, _, fileID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.deleted = append(s.deleted, fileID)
+	return nil
 }
 
 func (s *stubDrive) About(_ context.Context, accessToken string) (*google.About, error) {
@@ -118,6 +189,7 @@ func newHarness(t *testing.T) *harness {
 
 	accountService := accounts.NewService(st, authService, tokens, drive, fake,
 		accounts.Config{Concurrency: 4, Timeout: 2 * time.Second}, logger)
+	fileService := files.NewService(accountService, drive, logger)
 
 	srv := New(Deps{
 		Config: &config.Config{
@@ -136,6 +208,7 @@ func newHarness(t *testing.T) *harness {
 		Auth:     authService,
 		Google:   fake,
 		Accounts: accountService,
+		Files:    fileService,
 		Build:    BuildInfo{Version: "test"},
 	})
 

@@ -15,6 +15,7 @@ import (
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/auth"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/config"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/cryptobox"
+	"github.com/sangamdrive/sangamdrive/apps/api/internal/files"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/google"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/logging"
 	"github.com/sangamdrive/sangamdrive/apps/api/internal/server"
@@ -100,6 +101,8 @@ func run() error {
 			Timeout:     cfg.DriveTimeout,
 		}, log)
 
+	fileService := files.NewService(accountService, drive, log)
+
 	srv := server.New(server.Deps{
 		Config:   cfg,
 		Logger:   log,
@@ -108,6 +111,7 @@ func run() error {
 		Auth:     authService,
 		Google:   googleAuth,
 		Accounts: accountService,
+		Files:    fileService,
 		Build:    server.BuildInfo{Version: version, Commit: commit, Built: built},
 	})
 

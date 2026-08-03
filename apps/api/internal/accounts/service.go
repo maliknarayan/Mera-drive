@@ -286,15 +286,105 @@ func (s *Service) Reorder(ctx context.Context, userID string, orderedIDs []strin
 	return nil
 }
 
-// --- internals -------------------------------------------------------------
+// --- shared account access -------------------------------------------------
 
-func (s *Service) fetchQuota(ctx context.Context, account *store.Account) (*google.StorageQuota, error) {
-	refreshToken, err := s.opener.OpenRefreshToken(account.RefreshTokenEnc)
+// Connected returns the accounts that are usable for Drive calls, in display
+// order. Other packages fan out over this rather than reading the store directly.
+func (s *Service) Connected(ctx context.Context, userID string) ([]*store.Account, error) {
+	stored, err := s.store.ListAccounts(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, apperr.Internal("Could not read your connected accounts.").WithCause(err)
 	}
 
-	accessToken, err := s.tokens.AccessToken(ctx, account.ID, refreshToken)
+	usable := make([]*store.Account, 0, len(stored))
+	for _, account := range stored {
+		if account.Status != store.StatusDisconnected {
+			usable = append(usable, account)
+		}
+	}
+	return usable, nil
+}
+
+// AccessTokenFor resolves one of a user's accounts to a live access token.
+//
+// This is the single door to Drive credentials: it enforces ownership, decrypts
+// the refresh token, and records a credentials failure as account state so the
+// dashboard stays honest.
+func (s *Service) AccessTokenFor(
+	ctx context.Context, userID, accountID string,
+) (*store.Account, string, error) {
+	account, err := s.store.GetAccount(ctx, userID, accountID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, "", apperr.NotFound("That connected account does not exist.")
+		}
+		return nil, "", apperr.Internal("Could not read the connected account.").WithCause(err)
+	}
+	if account.Status == store.StatusDisconnected {
+		return nil, "", apperr.ReauthRequired(
+			"This account is disconnected. Reconnect it to use it.",
+		).WithAccount(account.ID)
+	}
+
+	accessToken, err := s.accessTokenForAccount(ctx, account)
+	if err != nil {
+		failure := tagged(err, account.ID)
+		s.NoteFailure(ctx, account, failure)
+		return nil, "", failure
+	}
+	return account, accessToken, nil
+}
+
+// NoteFailure persists a per-account failure when it means the stored credentials
+// no longer work. Transient failures are left alone — a Google blip is not a
+// credentials problem, and flapping the status would flap the UI.
+func (s *Service) NoteFailure(ctx context.Context, account *store.Account, failure *apperr.Error) {
+	if failure == nil || failure.Code != apperr.CodeReauthRequired {
+		return
+	}
+
+	s.tokens.Forget(account.ID)
+
+	if account.Status == store.StatusReauthRequired {
+		return
+	}
+	if err := s.store.SetAccountStatus(ctx, account.ID, store.StatusReauthRequired); err != nil {
+		s.log.Warn("could not mark account as needing reconnection",
+			slog.String("account_id", account.ID),
+			slog.String("error", err.Error()),
+		)
+	}
+}
+
+// Touch records that an account was just used for a real operation.
+func (s *Service) Touch(ctx context.Context, accountID string) {
+	if err := s.store.TouchAccount(ctx, accountID, time.Now().UTC()); err != nil {
+		s.log.Warn("could not record account usage",
+			slog.String("account_id", accountID),
+			slog.String("error", err.Error()),
+		)
+	}
+}
+
+// CallTimeout is the per-Google-call budget, for callers running their own
+// fan-out over the same accounts.
+func (s *Service) CallTimeout() time.Duration { return s.timeout }
+
+// Concurrency is the configured fan-out width.
+func (s *Service) Concurrency() int { return s.concurrency }
+
+// --- internals -------------------------------------------------------------
+
+func (s *Service) accessTokenForAccount(ctx context.Context, account *store.Account) (string, error) {
+	refreshToken, err := s.opener.OpenRefreshToken(account.RefreshTokenEnc)
+	if err != nil {
+		return "", err
+	}
+	return s.tokens.AccessToken(ctx, account.ID, refreshToken)
+}
+
+func (s *Service) fetchQuota(ctx context.Context, account *store.Account) (*google.StorageQuota, error) {
+	accessToken, err := s.accessTokenForAccount(ctx, account)
 	if err != nil {
 		return nil, err
 	}
@@ -313,22 +403,10 @@ func (s *Service) applyFailure(
 ) {
 	view.StatusReason = failure.Message
 
-	if failure.Code != apperr.CodeReauthRequired {
-		return
+	if failure.Code == apperr.CodeReauthRequired {
+		view.Status = store.StatusReauthRequired
 	}
-
-	view.Status = store.StatusReauthRequired
-	s.tokens.Forget(account.ID)
-
-	if account.Status == store.StatusReauthRequired {
-		return
-	}
-	if err := s.store.SetAccountStatus(ctx, account.ID, store.StatusReauthRequired); err != nil {
-		s.log.Warn("could not mark account as needing reconnection",
-			slog.String("account_id", account.ID),
-			slog.String("error", err.Error()),
-		)
-	}
+	s.NoteFailure(ctx, account, failure)
 }
 
 func newView(account *store.Account) *View {
